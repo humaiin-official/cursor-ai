@@ -26,28 +26,6 @@ class ProductController(
         return ResponseEntity.ok(response)
     }
     
-    @GetMapping("/search")
-    fun searchProducts(
-        @RequestParam(required = false) keyword: String?,
-        @RequestParam(required = false) category: String?,
-        @RequestParam(required = false) brand: String?,
-        @RequestParam(required = false) minPrice: String?,
-        @RequestParam(required = false) maxPrice: String?,
-        @RequestParam(defaultValue = "0") page: Int,
-        @RequestParam(defaultValue = "20") size: Int
-    ): ResponseEntity<ProductListResponse> {
-        val searchRequest = ProductSearchRequest(
-            keyword = keyword,
-            category = category,
-            brand = brand,
-            minPrice = minPrice?.let { java.math.BigDecimal(it) },
-            maxPrice = maxPrice?.let { java.math.BigDecimal(it) }
-        )
-        
-        val response = productService.searchProducts(searchRequest, page, size)
-        return ResponseEntity.ok(response)
-    }
-    
     @GetMapping("/{id}")
     fun getProductById(@PathVariable id: Long): ResponseEntity<ProductDto> {
         val product = productService.getProductById(id)
@@ -57,19 +35,7 @@ class ProductController(
             ResponseEntity.notFound().build()
         }
     }
-    
-    @GetMapping("/category/{category}")
-    fun getProductsByCategory(@PathVariable category: String): ResponseEntity<List<ProductDto>> {
-        val products = productService.getProductsByCategory(category)
-        return ResponseEntity.ok(products)
-    }
-    
-    @GetMapping("/brand/{brand}")
-    fun getProductsByBrand(@PathVariable brand: String): ResponseEntity<List<ProductDto>> {
-        val products = productService.getProductsByBrand(brand)
-        return ResponseEntity.ok(products)
-    }
-    
+
     @PostMapping
     fun createProduct(@RequestBody productDto: ProductDto): ResponseEntity<ProductDto> {
         val createdProduct = productService.createProduct(productDto)
