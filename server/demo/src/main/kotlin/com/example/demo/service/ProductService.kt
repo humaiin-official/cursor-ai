@@ -23,51 +23,12 @@ class ProductService(
         val sort = Sort.by(Sort.Direction.fromString(direction), sortBy)
         val pageable: Pageable = PageRequest.of(page, size, sort)
         
-        val products = productRepository.findByIsActiveTrue()
-        val productDtos = products.map { ProductDto.fromEntity(it) }
+        val productPage = productRepository.findByIsActiveTrue(pageable)
+        val productDtos = productPage.content.map { ProductDto.fromEntity(it) }
         
         return ProductListResponse(
             products = productDtos,
-            totalCount = products.size.toLong()
-        )
-    }
-    
-    fun searchProducts(searchRequest: ProductSearchRequest, page: Int = 0, size: Int = 20): ProductListResponse {
-        val products = when {
-            !searchRequest.keyword.isNullOrBlank() -> {
-                productRepository.searchByKeyword(searchRequest.keyword)
-            }
-            !searchRequest.category.isNullOrBlank() -> {
-                productRepository.findByCategoryAndIsActiveTrue(searchRequest.category)
-            }
-            !searchRequest.brand.isNullOrBlank() -> {
-                productRepository.findByBrandAndIsActiveTrue(searchRequest.brand)
-            }
-            else -> {
-                productRepository.findByIsActiveTrue()
-            }
-        }.filter { product ->
-            // 가격 필터링
-            val priceFilter = when {
-                searchRequest.minPrice != null && searchRequest.maxPrice != null -> {
-                    product.price >= searchRequest.minPrice && product.price <= searchRequest.maxPrice
-                }
-                searchRequest.minPrice != null -> {
-                    product.price >= searchRequest.minPrice
-                }
-                searchRequest.maxPrice != null -> {
-                    product.price <= searchRequest.maxPrice
-                }
-                else -> true
-            }
-            priceFilter
-        }
-        
-        val productDtos = products.map { ProductDto.fromEntity(it) }
-        
-        return ProductListResponse(
-            products = productDtos,
-            totalCount = products.size.toLong()
+            totalCount = productPage.totalElements
         )
     }
     
@@ -76,16 +37,6 @@ class ProductService(
             .filter { it.isActive }
             .map { ProductDto.fromEntity(it) }
             .orElse(null)
-    }
-    
-    fun getProductsByCategory(category: String): List<ProductDto> {
-        return productRepository.findByCategoryAndIsActiveTrue(category)
-            .map { ProductDto.fromEntity(it) }
-    }
-    
-    fun getProductsByBrand(brand: String): List<ProductDto> {
-        return productRepository.findByBrandAndIsActiveTrue(brand)
-            .map { ProductDto.fromEntity(it) }
     }
     
     @Transactional
