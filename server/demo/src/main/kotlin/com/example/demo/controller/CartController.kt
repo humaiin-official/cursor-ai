@@ -1,8 +1,8 @@
 package com.example.demo.controller
 
 import com.example.demo.dto.CartRequest
-import com.example.demo.dto.CartResponse
-import com.example.demo.service.CartService
+import com.example.demo.dto.CartWithDiscountResponse
+import com.example.demo.service.CartWithDiscountService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -11,13 +11,13 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/cart")
 @CrossOrigin(origins = ["*"])
 class CartController(
-    private val cartService: CartService
+    private val cartWithDiscountService: CartWithDiscountService
 ) {
     
     @PostMapping("/calculate")
-    fun calculateCartTotal(@RequestBody cartRequest: CartRequest): ResponseEntity<CartResponse> {
+    fun calculateCartTotal(@RequestBody cartRequest: CartRequest): ResponseEntity<CartWithDiscountResponse> {
         return try {
-            val response = cartService.calculateCartTotalWithValidation(cartRequest)
+            val response = cartWithDiscountService.calculateCartTotalWithValidation(cartRequest)
             ResponseEntity.ok(response)
         } catch (e: IllegalArgumentException) {
             ResponseEntity.badRequest().build()
@@ -27,9 +27,9 @@ class CartController(
     }
     
     @PostMapping("/calculate-without-validation")
-    fun calculateCartTotalWithoutValidation(@RequestBody cartRequest: CartRequest): ResponseEntity<CartResponse> {
+    fun calculateCartTotalWithoutValidation(@RequestBody cartRequest: CartRequest): ResponseEntity<CartWithDiscountResponse> {
         return try {
-            val response = cartService.calculateCartTotal(cartRequest)
+            val response = cartWithDiscountService.calculateCartTotal(cartRequest)
             ResponseEntity.ok(response)
         } catch (e: Exception) {
             ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
@@ -38,7 +38,7 @@ class CartController(
     
     @PostMapping("/validate")
     fun validateCartItems(@RequestBody cartRequest: CartRequest): ResponseEntity<Map<String, Any>> {
-        val validationErrors = cartService.validateCartItems(cartRequest)
+        val validationErrors = cartWithDiscountService.validateCartItems(cartRequest)
         val response = mapOf(
             "isValid" to validationErrors.isEmpty(),
             "errors" to validationErrors
