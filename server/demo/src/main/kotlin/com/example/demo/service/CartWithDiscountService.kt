@@ -96,6 +96,17 @@ class CartWithDiscountService(
                 DiscountTarget.PRODUCT -> {
                     policy.targetProductId == product.id
                 }
+                DiscountTarget.CATEGORY -> {
+                    policy.targetCategory != null && 
+                    product.category != null && 
+                    policy.targetCategory == product.category
+                }
+                DiscountTarget.BRAND -> {
+                    // 브랜드 할인: 정책의 타겟 브랜드와 상품의 브랜드가 일치하는지 확인
+                    policy.targetBrand != null && 
+                    product.brand != null && 
+                    policy.targetBrand == product.brand
+                }
                 DiscountTarget.QUANTITY -> {
                     policy.minQuantity?.let { item.quantity >= it } ?: true &&
                     policy.maxQuantity?.let { item.quantity <= it } ?: true

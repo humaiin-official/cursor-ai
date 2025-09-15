@@ -33,6 +33,50 @@ class CartWithDiscountServiceTest {
         cartWithDiscountService = CartWithDiscountService(productRepository, discountPolicyRepository)
     }
 
+    // 테스트 데이터 생성 헬퍼 메서드들
+    private fun createProduct(
+        id: Long = 1L, 
+        name: String = "상품1", 
+        price: BigDecimal = BigDecimal("10000"), 
+        stock: Int = 10,
+        category: String? = null,
+        brand: String? = null
+    ): Product {
+        return Product(id = id, name = name, price = price, stock = stock, category = category, brand = brand)
+    }
+
+    private fun createCategoryDiscountPolicy(
+        targetCategory: String,
+        discountType: DiscountType = DiscountType.PERCENTAGE,
+        discountValue: BigDecimal = BigDecimal("15")
+    ): DiscountPolicy {
+        return DiscountPolicy(
+            id = 1L,
+            name = "$targetCategory 카테고리 할인",
+            discountType = discountType,
+            discountTarget = DiscountTarget.CATEGORY,
+            discountValue = discountValue,
+            targetCategory = targetCategory,
+            isActive = true
+        )
+    }
+
+    private fun createBrandDiscountPolicy(
+        targetBrand: String,
+        discountType: DiscountType = DiscountType.PERCENTAGE,
+        discountValue: BigDecimal = BigDecimal("20")
+    ): DiscountPolicy {
+        return DiscountPolicy(
+            id = 1L,
+            name = "$targetBrand 브랜드 할인",
+            discountType = discountType,
+            discountTarget = DiscountTarget.BRAND,
+            discountValue = discountValue,
+            targetBrand = targetBrand,
+            isActive = true
+        )
+    }
+
     @Test
     @DisplayName("할인 없는 장바구니 총액 계산 - 정상 케이스")
     fun `calculateCartTotal should return correct total when no discount policies exist`() {
@@ -385,5 +429,173 @@ class CartWithDiscountServiceTest {
         assert(result.totalAmount == BigDecimal("3703.68"))
         assert(result.totalDiscountAmount == BigDecimal("370.3680"))
         assert(result.finalTotalAmount == BigDecimal("3333.3120"))
+    }
+
+    @Test
+    @DisplayName("카테고리별 비율 할인 정책 적용 테스트")
+    fun `calculateCartTotal should apply category percentage discount correctly`() {
+        // Given
+        val product = createProduct(name = "전자제품", category = "ELECTRONICS")
+        val discountPolicy = createCategoryDiscountPolicy("ELECTRONICS", DiscountType.PERCENTAGE, BigDecimal("15"))
+        val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 2)))
+        
+        every { productRepository.findById(1L) } returns Optional.of(product)
+        every { discountPolicyRepository.findActivePoliciesByDate(any()) } returns listOf(discountPolicy)
+
+        // When
+        val result = cartWithDiscountService.calculateCartTotal(cartRequest)
+
+        // Then
+        assert(result.items.size == 1)
+        assert(result.items[0].totalPrice == BigDecimal("20000"))
+        assert(result.items[0].discountAmount == BigDecimal("3000.00")) // 15% 할인
+        assert(result.items[0].finalPrice == BigDecimal("17000.00"))
+        assert(result.totalAmount == BigDecimal("20000"))
+        assert(result.totalDiscountAmount == BigDecimal("3000.00"))
+        assert(result.finalTotalAmount == BigDecimal("17000.00"))
+    }
+
+    @Test
+    @DisplayName("카테고리별 고정 금액 할인 정책 적용 테스트")
+    fun `calculateCartTotal should apply category fixed amount discount correctly`() {
+        // Given
+        val product = createProduct(name = "의류", price = BigDecimal("50000"), stock = 5, category = "CLOTHING")
+        val discountPolicy = createCategoryDiscountPolicy("CLOTHING", DiscountType.FIXED_AMOUNT, BigDecimal("5000"))
+        val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 1)))
+        
+        every { productRepository.findById(1L) } returns Optional.of(product)
+        every { discountPolicyRepository.findActivePoliciesByDate(any()) } returns listOf(discountPolicy)
+
+        // When
+        val result = cartWithDiscountService.calculateCartTotal(cartRequest)
+
+        // Then
+        assert(result.items.size == 1)
+        assert(result.items[0].totalPrice == BigDecimal("50000"))
+        assert(result.items[0].discountAmount == BigDecimal("5000")) // 고정 금액 할인
+        assert(result.items[0].finalPrice == BigDecimal("45000"))
+        assert(result.totalAmount == BigDecimal("50000"))
+        assert(result.totalDiscountAmount == BigDecimal("5000"))
+        assert(result.finalTotalAmount == BigDecimal("45000"))
+    }
+
+    @Test
+    @DisplayName("카테고리 할인 정책 - 카테고리가 다른 경우 할인 미적용")
+    fun `calculateCartTotal should not apply category discount when category does not match`() {
+        // Given
+        val product = createProduct(name = "전자제품", category = "ELECTRONICS")
+        val discountPolicy = createCategoryDiscountPolicy("CLOTHING", DiscountType.PERCENTAGE, BigDecimal("15")) // 다른 카테고리
+        val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 2)))
+        
+        every { productRepository.findById(1L) } returns Optional.of(product)
+        every { discountPolicyRepository.findActivePoliciesByDate(any()) } returns listOf(discountPolicy)
+
+        // When
+        val result = cartWithDiscountService.calculateCartTotal(cartRequest)
+
+        // Then
+        assert(result.items.size == 1)
+        assert(result.items[0].totalPrice == BigDecimal("20000"))
+        assert(result.items[0].discountAmount == BigDecimal("0")) // 할인 미적용
+        assert(result.items[0].finalPrice == BigDecimal("20000"))
+        assert(result.totalAmount == BigDecimal("20000"))
+        assert(result.totalDiscountAmount == BigDecimal("0"))
+        assert(result.finalTotalAmount == BigDecimal("20000"))
+    }
+
+    @Test
+    @DisplayName("브랜드별 비율 할인 정책 적용 테스트")
+    fun `calculateCartTotal should apply brand percentage discount correctly`() {
+        // Given
+        val product = createProduct(name = "삼성 갤럭시", price = BigDecimal("50000"), brand = "SAMSUNG")
+        val discountPolicy = createBrandDiscountPolicy("SAMSUNG", DiscountType.PERCENTAGE, BigDecimal("20"))
+        val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 1)))
+        
+        every { productRepository.findById(1L) } returns Optional.of(product)
+        every { discountPolicyRepository.findActivePoliciesByDate(any()) } returns listOf(discountPolicy)
+
+        // When
+        val result = cartWithDiscountService.calculateCartTotal(cartRequest)
+
+        // Then
+        assert(result.items.size == 1)
+        assert(result.items[0].totalPrice == BigDecimal("50000"))
+        assert(result.items[0].discountAmount == BigDecimal("10000.00")) // 20% 할인
+        assert(result.items[0].finalPrice == BigDecimal("40000.00"))
+        assert(result.totalAmount == BigDecimal("50000"))
+        assert(result.totalDiscountAmount == BigDecimal("10000.00"))
+        assert(result.finalTotalAmount == BigDecimal("40000.00"))
+    }
+
+    @Test
+    @DisplayName("브랜드별 고정 금액 할인 정책 적용 테스트")
+    fun `calculateCartTotal should apply brand fixed amount discount correctly`() {
+        // Given
+        val product = createProduct(name = "나이키 운동화", price = BigDecimal("80000"), brand = "NIKE")
+        val discountPolicy = createBrandDiscountPolicy("NIKE", DiscountType.FIXED_AMOUNT, BigDecimal("15000"))
+        val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 1)))
+        
+        every { productRepository.findById(1L) } returns Optional.of(product)
+        every { discountPolicyRepository.findActivePoliciesByDate(any()) } returns listOf(discountPolicy)
+
+        // When
+        val result = cartWithDiscountService.calculateCartTotal(cartRequest)
+
+        // Then
+        assert(result.items.size == 1)
+        assert(result.items[0].totalPrice == BigDecimal("80000"))
+        assert(result.items[0].discountAmount == BigDecimal("15000")) // 고정 금액 할인
+        assert(result.items[0].finalPrice == BigDecimal("65000"))
+        assert(result.totalAmount == BigDecimal("80000"))
+        assert(result.totalDiscountAmount == BigDecimal("15000"))
+        assert(result.finalTotalAmount == BigDecimal("65000"))
+    }
+
+    @Test
+    @DisplayName("브랜드 할인 정책 - 브랜드가 다른 경우 할인 미적용")
+    fun `calculateCartTotal should not apply brand discount when brand does not match`() {
+        // Given
+        val product = createProduct(name = "삼성 갤럭시", price = BigDecimal("50000"), brand = "SAMSUNG")
+        val discountPolicy = createBrandDiscountPolicy("APPLE", DiscountType.PERCENTAGE, BigDecimal("20")) // 다른 브랜드
+        val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 1)))
+        
+        every { productRepository.findById(1L) } returns Optional.of(product)
+        every { discountPolicyRepository.findActivePoliciesByDate(any()) } returns listOf(discountPolicy)
+
+        // When
+        val result = cartWithDiscountService.calculateCartTotal(cartRequest)
+
+        // Then
+        assert(result.items.size == 1)
+        assert(result.items[0].totalPrice == BigDecimal("50000"))
+        assert(result.items[0].discountAmount == BigDecimal("0")) // 할인 미적용
+        assert(result.items[0].finalPrice == BigDecimal("50000"))
+        assert(result.totalAmount == BigDecimal("50000"))
+        assert(result.totalDiscountAmount == BigDecimal("0"))
+        assert(result.finalTotalAmount == BigDecimal("50000"))
+    }
+
+    @Test
+    @DisplayName("브랜드 할인 정책 - 상품에 브랜드가 없는 경우 할인 미적용")
+    fun `calculateCartTotal should not apply brand discount when product has no brand`() {
+        // Given
+        val product = createProduct(name = "일반 상품", price = BigDecimal("30000")) // 브랜드 없음
+        val discountPolicy = createBrandDiscountPolicy("SAMSUNG", DiscountType.PERCENTAGE, BigDecimal("20"))
+        val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 1)))
+        
+        every { productRepository.findById(1L) } returns Optional.of(product)
+        every { discountPolicyRepository.findActivePoliciesByDate(any()) } returns listOf(discountPolicy)
+
+        // When
+        val result = cartWithDiscountService.calculateCartTotal(cartRequest)
+
+        // Then
+        assert(result.items.size == 1)
+        assert(result.items[0].totalPrice == BigDecimal("30000"))
+        assert(result.items[0].discountAmount == BigDecimal("0")) // 할인 미적용
+        assert(result.items[0].finalPrice == BigDecimal("30000"))
+        assert(result.totalAmount == BigDecimal("30000"))
+        assert(result.totalDiscountAmount == BigDecimal("0"))
+        assert(result.finalTotalAmount == BigDecimal("30000"))
     }
 }
