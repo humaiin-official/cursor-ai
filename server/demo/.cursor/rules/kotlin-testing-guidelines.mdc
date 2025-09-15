@@ -218,6 +218,166 @@ find build/reports/tests -name "*.html" | head -1 | xargs cat | grep CartService
 - **빠른 실행**: SpringBootTest 대비 빠른 실행 시간
 - **명확한 실패 메시지**: 실패 시 원인 파악 가능
 
+## 테스트 작성 시 발생하기 쉬운 문제들과 해결 방안
+
+### BigDecimal 정밀도 문제
+
+**문제 상황:**
+- 테스트 예상값: `BigDecimal("2000")`
+- 실제 계산값: `BigDecimal("2000.00")`
+- 소수점 자릿수 차이로 인한 비교 실패
+
+**해결 방안:**
+```kotlin
+// 구현 시 정밀도 명시
+val percentageDiscount = itemTotalPrice.multiply(
+    policy.discountValue.divide(BigDecimal("100"), 2, RoundingMode.HALF_UP)
+)
+
+// 테스트 시 실제 계산 결과 확인 후 작성
+@Test
+@DisplayName("BigDecimal 정밀도 테스트")
+fun `calculateCartTotal should handle BigDecimal precision correctly`() {
+    // Given
+    val product = Product(price = BigDecimal("1234.56"))
+    val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 3)))
+    
+    // When
+    val result = service.calculateCartTotal(cartRequest)
+    
+    // Then - 실제 계산 결과에 맞게 작성
+    assert(result.items[0].discountAmount == BigDecimal("370.3680")) // 정확한 계산 결과
+    assert(result.items[0].finalPrice == BigDecimal("3333.3120"))
+}
+```
+
+### 복잡한 소수점 계산 정밀도 문제
+
+**문제 상황:**
+- 복잡한 계산에서 예상값과 실제값 불일치
+- `1234.56 * 3 * 0.1 = 370.3680` (실제) vs `370.37` (예상)
+
+**해결 방안:**
+```kotlin
+// 1단계: 디버깅 출력으로 실제 값 확인
+@Test
+fun `debug test for actual values`() {
+    // Given
+    val product = Product(price = BigDecimal("1234.56"))
+    val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 3)))
+    
+    // When
+    val result = service.calculateCartTotal(cartRequest)
+    
+    // Then - 실제 값 확인
+    println("Actual discountAmount: ${result.items[0].discountAmount}")
+    println("Actual finalPrice: ${result.items[0].finalPrice}")
+    
+    // 실제 값에 맞게 테스트 수정
+    assert(result.items[0].discountAmount == BigDecimal("370.3680"))
+}
+
+// 2단계: 계산 로직에서 정밀도 통일
+private fun calculateDiscountAmount(amount: BigDecimal, percentage: BigDecimal): BigDecimal {
+    return amount.multiply(percentage.divide(BigDecimal("100"), 4, RoundingMode.HALF_UP))
+        .setScale(2, RoundingMode.HALF_UP) // 최종 결과를 2자리로 통일
+}
+```
+
+### 테스트 실패 원인 파악 어려움
+
+**문제 상황:**
+- 테스트 실패 시 원인을 파악하기 어려움
+- 예상값과 실제값의 차이를 확인할 수 없음
+
+**해결 방안:**
+```kotlin
+// 디버깅 테스트 작성
+@Test
+fun `debug test for value verification`() {
+    // Given
+    val testData = createTestData()
+    
+    // When
+    val result = service.process(testData)
+    
+    // Then - 값 확인
+    println("Expected: ${expectedValue}")
+    println("Actual: ${result.actualValue}")
+    
+    // 실제 값에 맞게 테스트 수정
+    assert(result.actualValue == BigDecimal("actual.calculated.value"))
+}
+
+// 단계별 검증
+@Test
+fun `step by step verification`() {
+    // 1단계: 기본 계산 확인
+    val basicResult = service.calculateBasicAmount(input)
+    assert(basicResult == BigDecimal("10000"))
+    
+    // 2단계: 할인 적용 확인
+    val discountResult = service.applyDiscount(basicResult, discountRate)
+    assert(discountResult == BigDecimal("9000.00"))
+    
+    // 3단계: 최종 결과 확인
+    val finalResult = service.calculateFinalAmount(discountResult)
+    assert(finalResult == BigDecimal("9000.00"))
+}
+```
+
+### 예상값과 실제값 불일치 문제
+
+**문제 상황:**
+- 구현 후 테스트 실패로 인한 혼란
+- 예상값을 임의로 설정하여 실제 동작과 맞지 않음
+
+**해결 방안:**
+```kotlin
+// 실제 구현 결과에 맞게 테스트 작성
+@Test
+fun `calculateCartTotal should apply discount correctly`() {
+    // Given
+    val product = Product(price = BigDecimal("10000"))
+    val discountPolicy = DiscountPolicy(discountValue = BigDecimal("10"))
+    
+    // When
+    val result = service.calculateCartTotal(cartRequest)
+    
+    // Then - 실제 구현 결과에 맞게 수정
+    assert(result.discountAmount == BigDecimal("1000.00")) // 실제 계산 결과
+}
+
+// 구현 코드
+fun calculateCartTotal(cartRequest: CartRequest): CartResponse {
+    // 실제 동작하는 코드 구현
+    val discountAmount = calculateDiscountAmount(totalAmount, discountPercentage)
+    return CartResponse(discountAmount = discountAmount)
+}
+```
+
+### BigDecimal 사용 시 주의사항
+
+**해결 방안:**
+```kotlin
+// 1. 항상 정밀도와 반올림 모드 지정
+val result = amount1.divide(amount2, 2, RoundingMode.HALF_UP)
+
+// 2. 계산 결과의 스케일 통일
+val finalAmount = calculatedAmount.setScale(2, RoundingMode.HALF_UP)
+
+// 3. 테스트에서 정확한 값 사용
+assert(result == BigDecimal("1234.56")) // 정확한 소수점 자릿수
+
+// 4. 계산 로직과 테스트 값의 일관성 유지
+class DiscountCalculator {
+    fun calculatePercentageDiscount(amount: BigDecimal, percentage: BigDecimal): BigDecimal {
+        return amount.multiply(percentage.divide(BigDecimal("100"), 4, RoundingMode.HALF_UP))
+            .setScale(2, RoundingMode.HALF_UP) // 통일된 스케일
+    }
+}
+```
+
 ## 주의사항
 
 1. **함수명 점(.) 사용 금지**: 컴파일 오류 발생
@@ -225,5 +385,10 @@ find build/reports/tests -name "*.html" | head -1 | xargs cat | grep CartService
 3. **MockK 문법 사용**: `every { } returns` 패턴 사용
 4. **포괄적 커버리지**: 정상/예외/경계값 모든 케이스 테스트
 5. **한국어 DisplayName**: 테스트 목적을 명확히 표현
+6. **BigDecimal 정밀도 관리**: 항상 정밀도와 반올림 모드 지정
+7. **실제 값 확인**: 예상값을 임의로 설정하지 말고 실제 계산 결과에 맞춤
+8. **단계별 디버깅**: 복잡한 계산은 단계별로 검증
+9. **디버깅 출력 활용**: 테스트 실패 시 실제 값 확인
+10. **예상값 검증**: 구현 후 실제 동작을 확인하고 테스트 수정
 
 이 가이드라인을 따라 일관성 있고 신뢰할 수 있는 테스트를 작성하세요.

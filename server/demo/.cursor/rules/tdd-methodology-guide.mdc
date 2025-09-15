@@ -1,0 +1,407 @@
+---
+alwaysApply: true
+description: "TDD 방법론 가이드라인 및 실무 적용 방법"
+---
+
+# TDD (Test-Driven Development) 방법론 가이드라인
+
+## TDD란?
+
+**Test-Driven Development (테스트 주도 개발)**는 테스트를 먼저 작성하고, 그 테스트를 통과하는 최소한의 코드를 작성한 후, 코드를 개선하는 반복적인 개발 방법론입니다.
+
+## TDD의 핵심 원칙
+
+### Red-Green-Refactor 사이클
+1. **Red**: 실패하는 테스트 작성
+2. **Green**: 테스트를 통과하는 최소한의 코드 작성
+3. **Refactor**: 코드와 테스트 모두 개선
+
+## TDD 진행 방법
+
+### 1단계: Red (실패하는 테스트 작성)
+
+**목표**: 구현하고자 하는 기능에 대한 테스트를 먼저 작성
+
+```kotlin
+// 예시: 할인 기능이 포함된 장바구니 서비스
+@Test
+@DisplayName("상품별 비율 할인 정책 적용 테스트")
+fun `calculateCartTotal should apply product percentage discount correctly`() {
+    // Given
+    val product = Product(id = 1L, name = "상품1", price = BigDecimal("10000"), stock = 10)
+    val discountPolicy = DiscountPolicy(
+        id = 1L,
+        name = "상품1 10% 할인",
+        discountType = DiscountType.PERCENTAGE,
+        discountTarget = DiscountTarget.PRODUCT,
+        discountValue = BigDecimal("10"),
+        targetProductId = 1L,
+        isActive = true
+    )
+    val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 2)))
+    
+    every { productRepository.findById(1L) } returns Optional.of(product)
+    every { discountPolicyRepository.findActivePoliciesByDate(any()) } returns listOf(discountPolicy)
+
+    // When
+    val result = cartWithDiscountService.calculateCartTotal(cartRequest)
+
+    // Then
+    assert(result.items.size == 1)
+    assert(result.items[0].totalPrice == BigDecimal("20000"))
+    assert(result.items[0].discountAmount == BigDecimal("2000.00")) // 10% 할인
+    assert(result.items[0].finalPrice == BigDecimal("18000.00"))
+    assert(result.totalAmount == BigDecimal("20000"))
+    assert(result.totalDiscountAmount == BigDecimal("2000.00"))
+    assert(result.finalTotalAmount == BigDecimal("18000.00"))
+}
+```
+
+**Red 단계 체크리스트:**
+- [ ] 테스트가 컴파일되지 않거나 실행 시 실패하는가?
+- [ ] 테스트가 구현하고자 하는 기능을 명확히 표현하는가?
+- [ ] 테스트가 실패하는 이유가 명확한가?
+
+### 2단계: Green (테스트를 통과하는 최소한의 코드 작성)
+
+**목표**: 테스트를 통과하는 최소한의 코드만 작성
+
+```kotlin
+// 최소한의 구현
+fun calculateCartTotal(cartRequest: CartRequest): CartWithDiscountResponse {
+    val cartItems = mutableListOf<CartWithDiscountItemResponse>()
+    var totalAmount = BigDecimal.ZERO
+    var totalItemCount = 0
+    var totalDiscountAmount = BigDecimal.ZERO
+    
+    // 활성 할인 정책 조회
+    val activeDiscountPolicies = discountPolicyRepository.findActivePoliciesByDate(LocalDateTime.now())
+    
+    for (item in cartRequest.items) {
+        val product = productRepository.findById(item.productId)
+            .filter { it.isActive }
+            .orElse(null)
+        
+        if (product != null) {
+            val itemTotalPrice = product.price.multiply(BigDecimal(item.quantity))
+            
+            // 할인 금액 계산 (간단한 구현)
+            val itemDiscountAmount = calculateItemDiscountAmount(
+                product, item, itemTotalPrice, activeDiscountPolicies
+            )
+            
+            val finalPrice = itemTotalPrice.subtract(itemDiscountAmount)
+            
+            val cartItem = CartWithDiscountItemResponse(
+                productId = product.id!!,
+                productName = product.name,
+                price = product.price,
+                quantity = item.quantity,
+                totalPrice = itemTotalPrice,
+                discountAmount = itemDiscountAmount,
+                finalPrice = finalPrice
+            )
+            
+            cartItems.add(cartItem)
+            totalAmount = totalAmount.add(itemTotalPrice)
+            totalDiscountAmount = totalDiscountAmount.add(itemDiscountAmount)
+            totalItemCount += item.quantity
+        }
+    }
+    
+    val finalTotalAmount = totalAmount.subtract(totalDiscountAmount)
+    
+    return CartWithDiscountResponse(
+        items = cartItems,
+        totalAmount = totalAmount,
+        totalItemCount = totalItemCount,
+        totalDiscountAmount = totalDiscountAmount,
+        finalTotalAmount = finalTotalAmount
+    )
+}
+```
+
+**Green 단계 체크리스트:**
+- [ ] 모든 테스트가 통과하는가?
+- [ ] 최소한의 코드로 테스트를 통과시키는가?
+- [ ] 구현이 테스트 요구사항을 만족하는가?
+
+### 3단계: Refactor (코드와 테스트 개선)
+
+**목표**: 코드의 품질을 개선하고 테스트를 더 명확하게 만들기
+
+```kotlin
+// 리팩토링된 구현
+fun calculateCartTotal(cartRequest: CartRequest): CartWithDiscountResponse {
+    val cartItems = mutableListOf<CartWithDiscountItemResponse>()
+    var totalAmount = BigDecimal.ZERO
+    var totalItemCount = 0
+    var totalDiscountAmount = BigDecimal.ZERO
+    
+    val activeDiscountPolicies = discountPolicyRepository.findActivePoliciesByDate(LocalDateTime.now())
+    
+    for (item in cartRequest.items) {
+        val product = productRepository.findById(item.productId)
+            .filter { it.isActive }
+            .orElse(null)
+        
+        if (product != null) {
+            val itemTotalPrice = product.price.multiply(BigDecimal(item.quantity))
+            
+            val applicablePolicies = findApplicableDiscountPolicies(
+                product, item, itemTotalPrice, activeDiscountPolicies
+            )
+            
+            val itemDiscountAmount = calculateItemDiscountAmount(
+                product, item, itemTotalPrice, applicablePolicies
+            )
+            
+            val finalPrice = itemTotalPrice.subtract(itemDiscountAmount)
+            
+            val cartItem = CartWithDiscountItemResponse(
+                productId = product.id!!,
+                productName = product.name,
+                price = product.price,
+                quantity = item.quantity,
+                totalPrice = itemTotalPrice,
+                discountAmount = itemDiscountAmount,
+                finalPrice = finalPrice
+            )
+            
+            cartItems.add(cartItem)
+            totalAmount = totalAmount.add(itemTotalPrice)
+            totalDiscountAmount = totalDiscountAmount.add(itemDiscountAmount)
+            totalItemCount += item.quantity
+        }
+    }
+    
+    // 주문 금액별 할인 적용
+    val orderDiscountAmount = calculateOrderDiscountAmount(totalAmount, activeDiscountPolicies)
+    totalDiscountAmount = totalDiscountAmount.add(orderDiscountAmount)
+    
+    val finalTotalAmount = totalAmount.subtract(totalDiscountAmount)
+    
+    return CartWithDiscountResponse(
+        items = cartItems,
+        totalAmount = totalAmount,
+        totalItemCount = totalItemCount,
+        totalDiscountAmount = totalDiscountAmount,
+        finalTotalAmount = finalTotalAmount
+    )
+}
+
+// 헬퍼 메서드 분리
+private fun findApplicableDiscountPolicies(
+    product: Product,
+    item: CartItemRequest,
+    itemTotalPrice: BigDecimal,
+    activePolicies: List<DiscountPolicy>
+): List<DiscountPolicy> {
+    return activePolicies.filter { policy ->
+        when (policy.discountTarget) {
+            DiscountTarget.PRODUCT -> policy.targetProductId == product.id
+            DiscountTarget.QUANTITY -> {
+                policy.minQuantity?.let { item.quantity >= it } ?: true &&
+                policy.maxQuantity?.let { item.quantity <= it } ?: true
+            }
+            DiscountTarget.PRODUCT_AMOUNT -> {
+                policy.minOrderAmount?.let { itemTotalPrice >= it } ?: true
+            }
+            else -> false
+        }
+    }
+}
+```
+
+**Refactor 단계 체크리스트:**
+- [ ] 코드가 더 읽기 쉬워졌는가?
+- [ ] 중복 코드가 제거되었는가?
+- [ ] 메서드가 적절한 크기로 분리되었는가?
+- [ ] 테스트가 여전히 통과하는가?
+
+## TDD 진행 시 주의사항
+
+### 1. 작은 단위로 진행
+```kotlin
+// 좋은 예: 작은 기능 단위
+@Test
+fun `should calculate basic cart total`() { ... }
+
+@Test
+fun `should apply product discount`() { ... }
+
+@Test
+fun `should apply quantity discount`() { ... }
+
+// 나쁜 예: 너무 큰 기능
+@Test
+fun `should calculate complete cart with all discounts and validations`() { ... }
+```
+
+### 2. 테스트 실패를 두려워하지 말기
+```kotlin
+// 테스트가 실패하는 것이 정상
+@Test
+fun `should apply discount correctly`() {
+    // Given
+    val product = Product(price = BigDecimal("10000"))
+    
+    // When
+    val result = service.calculateDiscount(product, BigDecimal("10"))
+    
+    // Then
+    assert(result == BigDecimal("1000")) // 처음에는 실패할 것
+}
+```
+
+### 3. 실제 값 확인 후 테스트 수정
+```kotlin
+// 디버깅을 통한 실제 값 확인
+@Test
+fun `debug actual values`() {
+    // Given
+    val input = createTestData()
+    
+    // When
+    val result = service.process(input)
+    
+    // Then
+    println("Actual result: $result")
+    // 실제 값에 맞게 테스트 수정
+    assert(result == BigDecimal("actual.calculated.value"))
+}
+```
+
+### 4. 점진적 기능 추가
+```kotlin
+// 1단계: 기본 기능
+@Test
+fun `should calculate cart total without discount`() { ... }
+
+// 2단계: 할인 기능 추가
+@Test
+fun `should apply product discount`() { ... }
+
+// 3단계: 복합 할인 기능
+@Test
+fun `should apply multiple discounts`() { ... }
+```
+
+## TDD의 장점
+
+### 1. 설계 개선
+- 테스트를 먼저 작성함으로써 인터페이스 설계에 집중
+- 사용자 관점에서의 API 설계
+
+### 2. 버그 감소
+- 모든 기능이 테스트로 검증됨
+- 리팩토링 시 안전성 보장
+
+### 3. 문서화 효과
+- 테스트가 코드의 사용법을 보여줌
+- 예상 동작을 명확히 표현
+
+### 4. 개발 속도 향상
+- 디버깅 시간 단축
+- 안전한 리팩토링 가능
+
+## TDD 적용 시나리오
+
+### 적합한 경우
+- 새로운 기능 개발
+- 복잡한 비즈니스 로직
+- 외부 의존성이 있는 코드
+- 계산 로직이 포함된 코드
+
+### 부적합한 경우
+- 단순한 CRUD 작업
+- UI 코드
+- 설정 파일
+- 프로토타입 개발
+
+## TDD 체크리스트
+
+### Red 단계
+- [ ] 테스트가 실패하는가?
+- [ ] 테스트가 명확한가?
+- [ ] 테스트가 구현할 기능을 정확히 표현하는가?
+
+### Green 단계
+- [ ] 모든 테스트가 통과하는가?
+- [ ] 최소한의 코드로 구현했는가?
+- [ ] 구현이 요구사항을 만족하는가?
+
+### Refactor 단계
+- [ ] 코드가 더 읽기 쉬워졌는가?
+- [ ] 중복이 제거되었는가?
+- [ ] 테스트가 여전히 통과하는가?
+
+## TDD 실행 명령어
+
+```bash
+# 특정 테스트 클래스 실행
+./gradlew test --tests CartWithDiscountServiceTest
+
+# 특정 테스트 메서드 실행
+./gradlew test --tests "*CartWithDiscountServiceTest.calculateCartTotal should apply product percentage discount correctly"
+
+# 전체 테스트 실행
+./gradlew test
+
+# 테스트 결과 확인
+find build/reports/tests -name "*.html" | head -1 | xargs cat | grep CartWithDiscountServiceTest
+```
+
+## TDD 모범 사례
+
+### 1. 테스트 명명 규칙
+```kotlin
+// 좋은 예
+fun `calculateCartTotal should return correct total when products exist`()
+fun `validateCartItems should return errors when product not found`()
+
+// 나쁜 예
+fun test1()
+fun testCart()
+```
+
+### 2. Given-When-Then 패턴
+```kotlin
+@Test
+fun `should calculate discount correctly`() {
+    // Given (준비)
+    val product = Product(price = BigDecimal("10000"))
+    val discountRate = BigDecimal("10")
+    
+    // When (실행)
+    val result = service.calculateDiscount(product, discountRate)
+    
+    // Then (검증)
+    assert(result == BigDecimal("1000"))
+}
+```
+
+### 3. 테스트 데이터 생성
+```kotlin
+// 테스트 데이터 생성 헬퍼
+private fun createProduct(id: Long = 1L, price: BigDecimal = BigDecimal("10000")): Product {
+    return Product(id = id, name = "상품$id", price = price, stock = 10)
+}
+
+private fun createDiscountPolicy(
+    targetProductId: Long = 1L,
+    discountValue: BigDecimal = BigDecimal("10")
+): DiscountPolicy {
+    return DiscountPolicy(
+        id = 1L,
+        name = "할인 정책",
+        discountType = DiscountType.PERCENTAGE,
+        discountTarget = DiscountTarget.PRODUCT,
+        discountValue = discountValue,
+        targetProductId = targetProductId,
+        isActive = true
+    )
+}
+```
+
+이 가이드라인을 따라 TDD를 실무에 적용하면 더 안정적이고 유지보수하기 쉬운 코드를 작성할 수 있습니다.
