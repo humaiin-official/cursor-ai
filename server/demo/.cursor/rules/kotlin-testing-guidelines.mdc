@@ -1,0 +1,229 @@
+---
+alwaysApply: true
+description: "Kotlin 테스트 작성 가이드라인 및 모범 사례"
+---
+
+# Kotlin 테스트 작성 가이드라인
+
+## 테스트 프레임워크 및 의존성
+
+### MockK 사용
+- **SpringBootTest 대신 MockK 사용**: 순수한 단위 테스트를 위해 MockK를 사용
+- **의존성 추가**: `testImplementation("io.mockk:mockk:1.14.5")`
+- **모킹 방식**: `mockk()` 사용하여 의존성 모킹
+
+```kotlin
+// 올바른 모킹 방식
+private lateinit var repository: ProductRepository
+private lateinit var service: CartService
+
+@BeforeEach
+fun setUp() {
+    repository = mockk()
+    service = CartService(repository)
+}
+
+// MockK 문법 사용
+every { repository.findById(1L) } returns Optional.of(product)
+```
+
+## 테스트 구조 및 명명 규칙
+
+### 테스트 클래스 구조
+```kotlin
+class ServiceTest {
+    private lateinit var dependency: Dependency
+    private lateinit var service: Service
+
+    @BeforeEach
+    fun setUp() {
+        dependency = mockk()
+        service = Service(dependency)
+    }
+
+    @Test
+    @DisplayName("한국어 설명")
+    fun `영어 메서드명 should 동작 when 조건`() {
+        // Given
+        // When
+        // Then
+    }
+}
+```
+
+### 함수명 규칙
+- **백틱 사용**: `fun \`methodName should behavior when condition\`()`
+- **점(.) 제외**: 함수명에 점(.) 사용 금지 (컴파일 오류 발생)
+- **명확한 의도**: 테스트의 목적이 명확히 드러나도록 명명
+
+```kotlin
+// 올바른 예시
+fun `calculateCartTotal should return correct total when products exist`()
+
+// 잘못된 예시 (점 사용으로 컴파일 오류)
+fun `validateCartItems should handle Integer.MAX_VALUE quantity`()
+```
+
+## 테스트 케이스 작성 원칙
+
+### AAA 패턴 (Arrange-Act-Assert)
+```kotlin
+@Test
+@DisplayName("장바구니 총액 계산 - 정상 케이스")
+fun `calculateCartTotal should return correct total when products exist`() {
+    // Given (Arrange)
+    val product = Product(id = 1L, name = "상품1", price = BigDecimal("10000"))
+    val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 2)))
+    every { repository.findById(1L) } returns Optional.of(product)
+
+    // When (Act)
+    val result = service.calculateCartTotal(cartRequest)
+
+    // Then (Assert)
+    assert(result.items.size == 1)
+    assert(result.totalAmount == BigDecimal("20000"))
+}
+```
+
+### 포괄적인 테스트 케이스
+1. **정상 케이스**: 기본적인 성공 시나리오
+2. **예외 케이스**: 오류 상황 처리
+3. **경계값 테스트**: 최소/최대값, 극값 처리
+4. **null 안전성**: null 값 처리
+5. **엣지 케이스**: 특수한 상황들
+
+### 경계값 테스트 예시
+```kotlin
+@Test
+@DisplayName("경계값 테스트 - 최소 수량 (1)")
+fun `validateCartItems should pass for minimum valid quantity`() {
+    // 최소 유효값 테스트
+}
+
+@Test
+@DisplayName("경계값 테스트 - Integer.MAX_VALUE 수량")
+fun `validateCartItems should handle Integer MAX VALUE quantity`() {
+    // 최대값 테스트 (점 제거)
+}
+
+@Test
+@DisplayName("경계값 테스트 - 재고와 동일한 수량")
+fun `validateCartItems should pass for quantity equal to stock`() {
+    // 경계값 테스트
+}
+```
+
+## 실제 구현에 맞는 테스트 작성
+
+### 코드 구현 분석 우선
+- **실제 동작 확인**: 코드를 먼저 분석하여 실제 동작 방식 파악
+- **테스트 수정**: 구현에 맞게 테스트 케이스 수정
+- **가정하지 말 것**: 코드의 실제 동작을 가정하지 말고 확인
+
+```kotlin
+// 실제 구현: 음수 수량도 계산에 포함
+if (product != null) {  // 수량 검증 없음
+    val itemTotalPrice = product.price.multiply(BigDecimal(item.quantity))
+    // ...
+}
+
+// 이에 맞는 테스트
+@Test
+@DisplayName("음수 수량 계산 테스트 - 음수 수량도 계산에 포함됨")
+fun `calculateCartTotal should include negative quantity items`() {
+    // Given
+    val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = -1)))
+    
+    // When
+    val result = service.calculateCartTotal(cartRequest)
+    
+    // Then
+    assert(result.totalAmount == BigDecimal("-10000")) // 음수 결과 확인
+}
+```
+
+## 검증 및 예외 처리 테스트
+
+### 예외 발생 테스트
+```kotlin
+@Test
+@DisplayName("검증과 함께 장바구니 총액 계산 - 검증 실패")
+fun `calculateCartTotalWithValidation should throw exception when validation fails`() {
+    // Given
+    val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 999L, quantity = 1)))
+    every { repository.findById(999L) } returns Optional.empty()
+
+    // When & Then
+    val exception = assertThrows<IllegalArgumentException> {
+        service.calculateCartTotalWithValidation(cartRequest)
+    }
+
+    assert(exception.message!!.contains("장바구니 검증 실패"))
+}
+```
+
+### 검증 로직 테스트
+```kotlin
+@Test
+@DisplayName("장바구니 검증 - 여러 오류")
+fun `validateCartItems should return multiple errors`() {
+    // Given
+    val cartRequest = CartRequest(items = listOf(
+        CartItemRequest(productId = 1L, quantity = 10), // 재고 부족
+        CartItemRequest(productId = 999L, quantity = 1) // 존재하지 않는 상품
+    ))
+
+    // When
+    val errors = service.validateCartItems(cartRequest)
+
+    // Then
+    assert(errors.size == 2)
+    assert(errors.contains("상품 '상품1'의 재고가 부족합니다"))
+    assert(errors.contains("상품 ID 999에 해당하는 상품을 찾을 수 없습니다"))
+}
+```
+
+## BigDecimal 및 정밀도 테스트
+
+### 정밀도 테스트
+```kotlin
+@Test
+@DisplayName("BigDecimal 정밀도 테스트")
+fun `calculateCartTotal should handle BigDecimal precision correctly`() {
+    // Given
+    val product = Product(price = BigDecimal("1234.56"))
+    val cartRequest = CartRequest(items = listOf(CartItemRequest(productId = 1L, quantity = 3)))
+
+    // When
+    val result = service.calculateCartTotal(cartRequest)
+
+    // Then
+    assert(result.totalAmount == BigDecimal("3703.68")) // 정확한 소수점 계산
+}
+```
+
+## 테스트 실행 및 검증
+
+### 테스트 실행
+```bash
+# 특정 테스트 클래스 실행
+./gradlew test --tests CartServiceTest
+
+# 테스트 결과 확인
+find build/reports/tests -name "*.html" | head -1 | xargs cat | grep CartServiceTest
+```
+
+### 성공 기준
+- **100% 성공률**: 모든 테스트 케이스 통과
+- **빠른 실행**: SpringBootTest 대비 빠른 실행 시간
+- **명확한 실패 메시지**: 실패 시 원인 파악 가능
+
+## 주의사항
+
+1. **함수명 점(.) 사용 금지**: 컴파일 오류 발생
+2. **실제 구현 우선**: 코드의 실제 동작에 맞게 테스트 작성
+3. **MockK 문법 사용**: `every { } returns` 패턴 사용
+4. **포괄적 커버리지**: 정상/예외/경계값 모든 케이스 테스트
+5. **한국어 DisplayName**: 테스트 목적을 명확히 표현
+
+이 가이드라인을 따라 일관성 있고 신뢰할 수 있는 테스트를 작성하세요.
