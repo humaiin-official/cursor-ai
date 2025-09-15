@@ -1,0 +1,933 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Demo API",
+    "description": "상품 관리 및 장바구니 계산 기능을 제공하는 Spring Boot 기반 REST API",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Demo API Support",
+      "email": "support@demo.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "개발 서버"
+    },
+    {
+      "url": "https://api.demo.com",
+      "description": "프로덕션 서버"
+    }
+  ],
+  "tags": [
+    {
+      "name": "products",
+      "description": "상품 관리 API"
+    },
+    {
+      "name": "cart",
+      "description": "장바구니 관리 API"
+    }
+  ],
+  "paths": {
+    "/api/products": {
+      "get": {
+        "tags": ["products"],
+        "summary": "전체 상품 조회",
+        "description": "상품 목록을 페이지네이션과 정렬 기능을 통해 조회합니다.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호 (0부터 시작)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "페이지당 상품 수",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "정렬 기준 필드",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt",
+              "enum": ["id", "name", "price", "stock", "category", "brand", "createdAt", "updatedAt"]
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "description": "정렬 방향",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc",
+              "enum": ["asc", "desc"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["products"],
+        "summary": "상품 생성",
+        "description": "새로운 상품을 생성합니다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "성공적으로 생성됨",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 요청",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/{id}": {
+      "get": {
+        "tags": ["products"],
+        "summary": "상품 상세 조회",
+        "description": "특정 상품의 상세 정보를 조회합니다.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "상품 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "상품을 찾을 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["products"],
+        "summary": "상품 수정",
+        "description": "기존 상품의 정보를 수정합니다.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "상품 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공적으로 수정됨",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "상품을 찾을 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 요청",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["products"],
+        "summary": "상품 삭제",
+        "description": "특정 상품을 삭제합니다.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "상품 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "성공적으로 삭제됨"
+          },
+          "404": {
+            "description": "상품을 찾을 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cart/calculate": {
+      "post": {
+        "tags": ["cart"],
+        "summary": "장바구니 총액 계산 (검증 포함)",
+        "description": "장바구니 아이템들의 총액을 계산하며, 상품 존재 여부와 재고를 검증합니다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartWithDiscountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "검증 실패 (상품 없음, 재고 부족 등)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cart/calculate-without-validation": {
+      "post": {
+        "tags": ["cart"],
+        "summary": "장바구니 총액 계산 (검증 없음)",
+        "description": "장바구니 아이템들의 총액을 계산하되, 검증 없이 계산합니다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartWithDiscountResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cart/validate": {
+      "post": {
+        "tags": ["cart"],
+        "summary": "장바구니 검증",
+        "description": "장바구니 아이템들의 유효성을 검증합니다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartValidationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ProductDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "상품 ID",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "상품명",
+            "example": "테스트 상품"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "상품 설명",
+            "example": "테스트용 상품입니다"
+          },
+          "price": {
+            "type": "number",
+            "format": "decimal",
+            "description": "가격",
+            "example": 10000.00
+          },
+          "stock": {
+            "type": "integer",
+            "description": "재고 수량",
+            "example": 100
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "카테고리",
+            "example": "전자제품"
+          },
+          "brand": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "브랜드",
+            "example": "테스트 브랜드"
+          },
+          "sku": {
+            "type": "string",
+            "maxLength": 20,
+            "description": "SKU 코드",
+            "example": "SKU123"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "활성 상태",
+            "example": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "생성일시",
+            "example": "2024-01-01T00:00:00"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "수정일시",
+            "example": "2024-01-01T00:00:00"
+          }
+        }
+      },
+      "ProductCreateRequest": {
+        "type": "object",
+        "required": ["name", "price", "stock"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "상품명",
+            "example": "테스트 상품"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "상품 설명",
+            "example": "테스트용 상품입니다"
+          },
+          "price": {
+            "type": "number",
+            "format": "decimal",
+            "description": "가격",
+            "example": 10000.00
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "재고 수량",
+            "example": 100
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "카테고리",
+            "example": "전자제품"
+          },
+          "brand": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "브랜드",
+            "example": "테스트 브랜드"
+          },
+          "sku": {
+            "type": "string",
+            "maxLength": 20,
+            "description": "SKU 코드",
+            "example": "SKU123"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "활성 상태",
+            "default": true,
+            "example": true
+          }
+        }
+      },
+      "ProductUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "상품명",
+            "example": "수정된 상품명"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "상품 설명",
+            "example": "수정된 상품 설명"
+          },
+          "price": {
+            "type": "number",
+            "format": "decimal",
+            "description": "가격",
+            "example": 15000.00
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "재고 수량",
+            "example": 50
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "카테고리",
+            "example": "수정된 카테고리"
+          },
+          "brand": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "브랜드",
+            "example": "수정된 브랜드"
+          },
+          "sku": {
+            "type": "string",
+            "maxLength": 20,
+            "description": "SKU 코드",
+            "example": "SKU456"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "활성 상태",
+            "example": true
+          }
+        }
+      },
+      "ProductListResponse": {
+        "type": "object",
+        "properties": {
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductDto"
+            },
+            "description": "상품 목록"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "전체 상품 수",
+            "example": 1
+          }
+        }
+      },
+      "CartItemRequest": {
+        "type": "object",
+        "required": ["productId", "quantity"],
+        "properties": {
+          "productId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "상품 ID",
+            "example": 1
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "수량",
+            "example": 2
+          }
+        }
+      },
+      "CartRequest": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CartItemRequest"
+            },
+            "description": "장바구니 아이템 목록",
+            "minItems": 1
+          }
+        }
+      },
+      "CartWithDiscountItemResponse": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "상품 ID",
+            "example": 1
+          },
+          "productName": {
+            "type": "string",
+            "description": "상품명",
+            "example": "테스트 상품"
+          },
+          "price": {
+            "type": "number",
+            "format": "decimal",
+            "description": "단가",
+            "example": 10000.00
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "수량",
+            "example": 2
+          },
+          "totalPrice": {
+            "type": "number",
+            "format": "decimal",
+            "description": "총 가격",
+            "example": 20000.00
+          },
+          "discountAmount": {
+            "type": "number",
+            "format": "decimal",
+            "description": "할인 금액",
+            "example": 2000.00
+          },
+          "finalPrice": {
+            "type": "number",
+            "format": "decimal",
+            "description": "최종 가격",
+            "example": 18000.00
+          }
+        }
+      },
+      "CartWithDiscountResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CartWithDiscountItemResponse"
+            },
+            "description": "장바구니 아이템 목록"
+          },
+          "totalAmount": {
+            "type": "number",
+            "format": "decimal",
+            "description": "총 금액",
+            "example": 35000.00
+          },
+          "totalItemCount": {
+            "type": "integer",
+            "description": "총 아이템 수",
+            "example": 3
+          },
+          "totalDiscountAmount": {
+            "type": "number",
+            "format": "decimal",
+            "description": "총 할인 금액",
+            "example": 2000.00
+          },
+          "finalTotalAmount": {
+            "type": "number",
+            "format": "decimal",
+            "description": "최종 총 금액",
+            "example": 33000.00
+          }
+        }
+      },
+      "CartValidationResponse": {
+        "type": "object",
+        "properties": {
+          "isValid": {
+            "type": "boolean",
+            "description": "검증 통과 여부",
+            "example": false
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "검증 오류 목록",
+            "example": ["상품 '상품1'의 재고가 부족합니다. 요청 수량: 10, 현재 재고: 5"]
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "오류 발생 시간",
+            "example": "2024-01-01T00:00:00"
+          },
+          "status": {
+            "type": "integer",
+            "description": "HTTP 상태 코드",
+            "example": 400
+          },
+          "error": {
+            "type": "string",
+            "description": "오류 타입",
+            "example": "Bad Request"
+          },
+          "message": {
+            "type": "string",
+            "description": "오류 메시지",
+            "example": "상품을 찾을 수 없습니다"
+          },
+          "path": {
+            "type": "string",
+            "description": "요청 경로",
+            "example": "/api/products/999"
+          }
+        }
+      },
+      "DiscountPolicy": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "할인 정책 ID",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "정책명",
+            "example": "상품 할인 정책"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "정책 설명",
+            "example": "특정 상품에 대한 할인 정책"
+          },
+          "discountType": {
+            "$ref": "#/components/schemas/DiscountType"
+          },
+          "discountTarget": {
+            "$ref": "#/components/schemas/DiscountTarget"
+          },
+          "discountValue": {
+            "type": "number",
+            "format": "decimal",
+            "description": "할인 값",
+            "example": 10.00
+          },
+          "maxDiscountAmount": {
+            "type": "number",
+            "format": "decimal",
+            "description": "최대 할인 금액",
+            "example": 5000.00
+          },
+          "minOrderAmount": {
+            "type": "number",
+            "format": "decimal",
+            "description": "최소 주문 금액",
+            "example": 10000.00
+          },
+          "minQuantity": {
+            "type": "integer",
+            "description": "최소 수량",
+            "example": 2
+          },
+          "maxQuantity": {
+            "type": "integer",
+            "description": "최대 수량",
+            "example": 10
+          },
+          "targetProductId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "대상 상품 ID",
+            "example": 1
+          },
+          "targetCategory": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "대상 카테고리",
+            "example": "전자제품"
+          },
+          "targetBrand": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "대상 브랜드",
+            "example": "테스트 브랜드"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "활성 상태",
+            "example": true
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "시작일시",
+            "example": "2024-01-01T00:00:00"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "종료일시",
+            "example": "2024-12-31T23:59:59"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "생성일시",
+            "example": "2024-01-01T00:00:00"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "수정일시",
+            "example": "2024-01-01T00:00:00"
+          }
+        }
+      },
+      "DiscountType": {
+        "type": "string",
+        "enum": ["PERCENTAGE", "FIXED_AMOUNT"],
+        "description": "할인 타입",
+        "example": "PERCENTAGE"
+      },
+      "DiscountTarget": {
+        "type": "string",
+        "enum": ["PRODUCT", "CATEGORY", "BRAND", "PRODUCT_GROUP", "QUANTITY", "ORDER_AMOUNT", "PRODUCT_AMOUNT"],
+        "description": "할인 대상",
+        "example": "PRODUCT"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "externalDocs": {
+    "description": "Demo API 문서",
+    "url": "https://github.com/demo/api-docs"
+  }
+}
