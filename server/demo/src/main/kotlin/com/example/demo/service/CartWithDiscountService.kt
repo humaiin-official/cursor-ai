@@ -3,6 +3,7 @@ package com.example.demo.service
 import com.example.demo.dto.CartItemResponse
 import com.example.demo.dto.CartRequest
 import com.example.demo.dto.CartResponse
+import com.example.demo.dto.CartWithDiscountResponse
 import com.example.demo.repository.ProductRepository
 import com.example.demo.repository.DiscountPolicyRepository
 import java.math.BigDecimal
@@ -15,7 +16,7 @@ class CartWithDiscountService(
     private val discountPolicyRepository: DiscountPolicyRepository
 ) {
 
-    fun calculateCartTotal(cartRequest: CartRequest): CartResponse {
+    fun calculateCartTotal(cartRequest: CartRequest): CartWithDiscountResponse {
         TODO("Not yet implemented")
     }
 
@@ -23,7 +24,7 @@ class CartWithDiscountService(
         TODO("Not yet implemented")
     }
 
-    fun calculateCartTotalWithValidation(cartRequest: CartRequest): CartResponse {
+    fun calculateCartTotalWithValidation(cartRequest: CartRequest): CartWithDiscountResponse {
         TODO("Not yet implemented")
     }
 }
